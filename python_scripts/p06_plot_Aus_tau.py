@@ -40,6 +40,28 @@ out = {'out':'out'}
 print('OK, all set')
 
 
+#%%
+# create an instance of the ncCDF4 class
+nc_fid = nc.Dataset(data_path + 'KDS75/temp_JFM_0' + '.nc', 'r')
+
+# get dimensions
+lat = nc_fid.variables['yt_ocean'][:]
+lon1 = nc_fid.variables['xt_ocean'][:]
+lon = lon1 + 210
+
+lon_W = 80
+lon_E = 180
+lat_N = -20
+lat_S = -70
+
+lon_W_idx = find_nearest_index(lon, lon_W)
+lon_E_idx = find_nearest_index(lon, lon_E)
+lat_N_idx = find_nearest_index(lat, lat_N)
+lat_S_idx = find_nearest_index(lat, lat_S)
+
+
+
+
 #%% Load data tau_x
 for v in var:
     for d, d_out in zip(DATA, DATA_out):
@@ -105,8 +127,8 @@ for v in var:
 #%% Calculate projection. mill is 'Miller Cylindrical'
 # gall is 'Gall Stereographic Equidistant.
 # takes some time to run...............
-Bm = Basemap(projection='mill', llcrnrlat=-70,urcrnrlat=0.01,\
-llcrnrlon=-70,urcrnrlon=290, resolution='c')
+Bm = Basemap(projection='gall', llcrnrlat=-70,urcrnrlat=-19.99,\
+llcrnrlon=89.99,urcrnrlon=180.01, resolution='c')
 
 pickle.dump(Bm,open('map.pickle','wb'),-1)  # pickle it 
 
@@ -121,9 +143,9 @@ plt.close('all') # close all existing figures
 fig = plt.figure() # generate figure
 matplotlib.rcParams.update({'font.size': 6}) 
 
-fig.set_size_inches(10.25, 5) # set figure size in inches
-row = 4
-col = 3
+fig.set_size_inches(12, 6) # set figure size in inches
+row = 3
+col = 4
 
 merid = np.zeros(12)
 paral = np.zeros(12)
@@ -133,15 +155,15 @@ paral[np.arange(0,11,col)] = 1
 
 s = 0
 
-for m in MMM:
-    for d, d_out in zip(DATA, DATA_out):    
+for d, d_out in zip(DATA, DATA_out):
+    for m in MMM:
         s = s + 1
 
         # position figure wrt window template
         ax = fig.add_subplot(row,col,s)
         pos = ax.get_position()
         bnd = list(pos.bounds)
-        magn = 0.04
+        magn = 0.025
         bnd = [bnd[0], bnd[1], bnd[2]+magn, bnd[3]+magn*m_aspect]
         ax.set_position(bnd)
         
@@ -198,28 +220,28 @@ for m in MMM:
         def round_to_base(x, base=5):
             return int(base * round(float(x) / base))
         # meridians. last input is meridians tick label
-        meridians = map(round_to_base, np.arange(-160, 180, 40))
+        meridians = map(round_to_base, np.arange(-160, 200, 20))
         Bm.drawmeridians(meridians, linewidth=0.2, labels=[0,0,0,merid[s-1]])
         # parallels. last input is paralles tick label
-        parallels = map(round_to_base, np.arange(-80, 20, 20))
+        parallels = map(round_to_base, np.arange(-80, 20, 10))
         Bm.drawparallels(parallels, linewidth=0.2, labels=[paral[s-1],0,0,0])
         
-        if s is 10:
-            cbar_pos = [bnd[0], bnd[1]-0.03, bnd[2], 0.01] 
+        if s is 4:
+            cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
             cbar_axe = fig.add_axes(cbar_pos)
             cbar = plt.colorbar(contf, cax=cbar_axe, 
-                                orientation='horizontal', drawedges=True)
+                                orientation='vertical', drawedges=True)
             cbar.set_label('N/m^-2') # units label on colourbar
             cbar.dividers.set_linewidth(0.2)
             cbar.outline.set_linewidth(0.5)
             cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
             cbar.ax.tick_params(width=0.2, length= 2)
             
-        elif s is 11:
-            cbar_pos = [bnd[0], bnd[1]-0.03, bnd[2], 0.01] 
+        elif s is 8:
+            cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
             cbar_axe = fig.add_axes(cbar_pos)
             cbar = plt.colorbar(contf, cax=cbar_axe, 
-                                orientation='horizontal', drawedges=True)
+                                orientation='vertical', drawedges=True)
             cbar.set_label('N/m^-2') # units label on colourbar
             cbar.dividers.set_linewidth(0.2)
             cbar.outline.set_linewidth(0.5)
@@ -231,6 +253,10 @@ for m in MMM:
 
 output_ls = os.listdir(figures_path)
 
+#
+if not scriptname:
+    scriptname = 'test'
+    
 #
 if scriptname not in output_ls:
     os.mkdir(figures_path + '/' + scriptname)

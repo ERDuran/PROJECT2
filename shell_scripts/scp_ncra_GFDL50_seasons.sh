@@ -1,0 +1,1 @@
+scp ncra_GFDL50_seasons.sh erd561@raijin.nci.org.au:/short/e14/erd561/SAMexp/.

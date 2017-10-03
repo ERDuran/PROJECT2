@@ -14,6 +14,7 @@ import matplotlib
 # find nearest value
 def find_nearest_index(array, value):
     return (np.abs(array - value)).argmin()
+
 #
 import sys
 #
@@ -35,71 +36,59 @@ var = ['x', 'y']
 
 scriptname = os.path.basename(sys.argv[0])[:-3]
 
-out = {'out':'out'}
+SSS0 = {'0':'raw surface salt data'}
 
 print('OK, all set')
 
 
-#%% Load data tau_x
-for v in var:
-    for d, d_out in zip(DATA, DATA_out):
-        for m in MMM:
-            # create an instance of the ncCDF4 class
-            nc_fid = nc.Dataset(data_path + 'KDS75' + d + '/tau_'
-                                + v + '_' + Mon[m][0] + '.nc', 'r')
+#%% Load data tau_x CT
+z_idx = 4
 
-            # same for temperature (1,2,3)
-            tau_0 = nc_fid.variables['tau_' + v][0,:,:]
+for d, d_out in zip(DATA, DATA_out):
+    for m in MMM:
+        # create an instance of the ncCDF4 class
+        nc_fid = nc.Dataset(data_path + 'KDS75' + d + 
+                            '/salt_' + m + '_0' + '.nc', 'r')
+        
+        # same for salterature (1,2,3)
+        SSS0[d_out + m] = nc_fid.variables['salt'][0,z_idx,:,:]
+        
+        #
+        print(d_out + m + ' OK !')
 
-            # Feb
-            nc_fid = nc.Dataset(data_path + 'KDS75' + d + '/tau_'
-                                + v + '_' + Mon[m][1] + '.nc', 'r')
-            tau_1 = nc_fid.variables['tau_' + v][0,:,:]
-            
-            # Mar
-            nc_fid = nc.Dataset(data_path + 'KDS75' + d + '/tau_'
-                                + v + '_' + Mon[m][2] + '.nc', 'r')
-            tau_2 = nc_fid.variables['tau_' + v][0,:,:]
-            
-            #
-            out[v + d_out + m] = (tau_0 + tau_1 + tau_2)/3
-            
-            #
-            print(v + d_out + m + ' OK !')
-            
+
 # get dimensions
-lat = nc_fid.variables['yu_ocean'][:]
-lon1 = nc_fid.variables['xu_ocean'][:]
+lat = nc_fid.variables['yt_ocean'][:]
+lon1 = nc_fid.variables['xt_ocean'][:]
+z = nc_fid.variables['st_ocean'][z_idx]
 
 
 #%% re-organise longitudes
-out1 = {'1':'re-arrange data so that maps start at 70W'}
+SSS1 = {'1':'re-arrange data so that maps start at 70W'}
 lon_less_m70 = lon1 < -70
 lon_less_m70_flipped = np.flipud(lon_less_m70)
 
-for v in var:
-    for d, d_out in zip(DATA, DATA_out):
-        for m in MMM:
-            ma = np.ma.empty((989,3600))
-            ma[:,lon_less_m70_flipped] = out[v + d_out + m][:,lon_less_m70]
-            ma[:,~lon_less_m70_flipped] = out[v + d_out + m][:,~lon_less_m70]
-            out1[v + d_out + m] = ma
-            print(v + d_out + m + ' OK !')
-
+for d, d_out in zip(DATA, DATA_out):
+    for m in MMM:
+        ma = np.ma.empty((988,3600))
+        ma[:,lon_less_m70_flipped] = SSS0[d_out + m][:,lon_less_m70]
+        ma[:,~lon_less_m70_flipped] = SSS0[d_out + m][:,~lon_less_m70]
+        SSS1[d_out + m] = ma
+        print(d_out + m + ' OK !')
+            
 
 #%% prepare data for plot
-outf = {'f':'create anomalies for columns 1 and 2'}
+SSSf = {'f':'create anomalies for columns 1 and 2'}
 
-for v in var:
-    for d, d_out in zip(DATA, DATA_out):
-        for m in MMM:
-            if d_out is 'CT':
-                outf[v + d_out + m] = out1[v + d_out + m]
-                
-            else:
-                outf[v + d_out + m] = out1[v + d_out + m] - out1[v + 'CT' + m]
+for d, d_out in zip(DATA, DATA_out):
+    for m in MMM:
+        if d_out is 'CT':
+            SSSf[d_out + m] = SSS1[d_out + m]
             
-            print(v + d_out + m + ' OK !')
+        else:
+            SSSf[d_out + m] = SSS1[d_out + m] - SSS1['CT' + m]
+        
+        print(d_out + m + ' OK !')
             
             
 #%% Calculate projection. mill is 'Miller Cylindrical'
@@ -134,10 +123,10 @@ paral[np.arange(0,11,col)] = 1
 s = 0
 
 for m in MMM:
-    for d, d_out in zip(DATA, DATA_out):    
+    for d, d_out in zip(DATA, DATA_out):   
         s = s + 1
-
-        # position figure wrt window template
+        
+        # position figure wrt window saltlate
         ax = fig.add_subplot(row,col,s)
         pos = ax.get_position()
         bnd = list(pos.bounds)
@@ -148,22 +137,22 @@ for m in MMM:
         # colourmap: blue to red because looking at bias.
         if d_out is 'CT':
             cmap = plt.get_cmap('gist_ncar')
-            step = 0.02
+            step = 0.25
             # levels to show on colourbar
-            contf_lvls = np.arange(-0.12,0.24+1e-08,step)
+            contf_lvls = np.arange(33,38+1e-08,step)
             
         else:
             cmap = plt.get_cmap('seismic')
-            step = 0.02
+            step = 0.2
             # levels to show on colourbar
-            contf_lvls = np.arange(-0.14,0.14+1e-08,step)            
+            contf_lvls = np.arange(-2,2+1e-08,step)            
         
         
         ax.set_facecolor('grey')
         
         # meshgrid of lon lats
         lons, lats = np.meshgrid(lon, lat)
-        # use projection template to create x and y axis
+        # use projection saltlate to create x and y axis
         x, y = Bm(lons, lats)
         
         # for quiver. data points
@@ -182,17 +171,11 @@ for m in MMM:
         Bm.fillcontinents(color='white')
         
         # filled contour plot
-        contf = Bm.contourf(x, y, outf['x' + d_out + m], 
+        contf = Bm.contourf(x, y, SSSf[d_out + m], 
                            contf_lvls, cmap=cmap, extend='both')
         
-        # quiver
-        Bm.quiver(x[points], y[points],
-                 outf['x' + d_out + m][points], 
-                 outf['y' + d_out + m][points], 
-                 scale=quiv_scale)
-        
         # title ...
-        title_name = 'KDS75 ' + d_out + ' tau x ' + m
+        title_name = 'KDS75 ' + d_out + ' SSS ' + m + ' z = ' + str(z)
         ax.set_title(title_name)
         
         def round_to_base(x, base=5):
@@ -209,7 +192,7 @@ for m in MMM:
             cbar_axe = fig.add_axes(cbar_pos)
             cbar = plt.colorbar(contf, cax=cbar_axe, 
                                 orientation='horizontal', drawedges=True)
-            cbar.set_label('N/m^-2') # units label on colourbar
+            cbar.set_label('psu') # units label on colourbar
             cbar.dividers.set_linewidth(0.2)
             cbar.outline.set_linewidth(0.5)
             cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
@@ -220,7 +203,7 @@ for m in MMM:
             cbar_axe = fig.add_axes(cbar_pos)
             cbar = plt.colorbar(contf, cax=cbar_axe, 
                                 orientation='horizontal', drawedges=True)
-            cbar.set_label('N/m^-2') # units label on colourbar
+            cbar.set_label('psu') # units label on colourbar
             cbar.dividers.set_linewidth(0.2)
             cbar.outline.set_linewidth(0.5)
             cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
@@ -235,8 +218,7 @@ output_ls = os.listdir(figures_path)
 if scriptname not in output_ls:
     os.mkdir(figures_path + '/' + scriptname)
 
-
 # save figure
 plt.savefig(figures_path + '/' + scriptname + '/' + scriptname[0:3] \
-            + '_fig1_' + '.png', bbox_inches='tight', dpi=300)
+            + '_fig1_' + str(z_idx) + '.png', bbox_inches='tight', dpi=300)
 
