@@ -40,27 +40,8 @@ out = {'out':'out'}
 print('OK, all set')
 
 
-#%%
-# create an instance of the ncCDF4 class
-nc_fid = nc.Dataset(data_path + 'KDS75/temp_JFM_0' + '.nc', 'r')
-
-# get dimensions
-lat = nc_fid.variables['yt_ocean'][:]
-lon1 = nc_fid.variables['xt_ocean'][:]
-lon = lon1 + 210
-
-lon_W = 80
-lon_E = 180
-lat_N = -20
-lat_S = -70
-
-lon_W_idx = find_nearest_index(lon, lon_W)
-lon_E_idx = find_nearest_index(lon, lon_E)
-lat_N_idx = find_nearest_index(lat, lat_N)
-lat_S_idx = find_nearest_index(lat, lat_S)
-
-
-
+def round_to_base(x, base=5):
+    return int(base * round(float(x) / base))
 
 #%% Load data tau_x
 for v in var:
@@ -127,8 +108,8 @@ for v in var:
 #%% Calculate projection. mill is 'Miller Cylindrical'
 # gall is 'Gall Stereographic Equidistant.
 # takes some time to run...............
-Bm = Basemap(projection='mill', llcrnrlat=-60.01,urcrnrlat=-19.99,\
-llcrnrlon=89.99,urcrnrlon=180.01, resolution='c')
+Bm = Basemap(projection='mill', llcrnrlat=-55.01,urcrnrlat=-19.99,\
+llcrnrlon=99.99,urcrnrlon=170.01, resolution='c')
 
 pickle.dump(Bm,open('map.pickle','wb'),-1)  # pickle it 
 
@@ -139,14 +120,13 @@ lon = lon1 + 210
 
 
 #%% plot surface maps: TEMPERATURE
-fign = 1
 plt.close('all') # close all existing figures
 fig = plt.figure() # generate figure
-matplotlib.rcParams.update({'font.size': 6}) 
+matplotlib.rcParams.update({'font.size': 14}) 
 
-fig.set_size_inches(13, 6) # set figure size in inches
-row = 3
-col = 4
+fig.set_size_inches(12, 10) # set figure size in inches
+row = 4
+col = 3
 
 merid = np.zeros(12)
 paral = np.zeros(12)
@@ -154,17 +134,25 @@ paral = np.zeros(12)
 merid[-col:] = 1
 paral[np.arange(0,11,col)] = 1
 
+plt.rc('text', usetex=True)
+plt.rc('font', family='serif')
+
 s = 0
 
-for d, d_out in zip(DATA, DATA_out):
-    for m in MMM:
+seasons =['Summer', 'Autumn', 'Winter', 'Spring']
+
+exps = ['CT', 'UP', 'PI']
+ex = 0
+
+for m in MMM:
+    for d, d_out in zip(DATA, DATA_out):    
         s = s + 1
 
         # position figure wrt window template
         ax = fig.add_subplot(row,col,s)
         pos = ax.get_position()
         bnd = list(pos.bounds)
-        magn = 0.025
+        magn = 0.04
         bnd = [bnd[0], bnd[1], bnd[2]+magn, bnd[3]+magn*m_aspect]
         ax.set_position(bnd)
         
@@ -192,7 +180,7 @@ for d, d_out in zip(DATA, DATA_out):
         # for quiver. data points
         yy = np.arange(0, y.shape[0], 20)
         xx = np.arange(0, x.shape[1], 30)
-        quiv_scale = 2
+        quiv_scale = 1.5
         
         #
         points = np.meshgrid(yy, xx)
@@ -212,40 +200,48 @@ for d, d_out in zip(DATA, DATA_out):
         Q = Bm.quiver(x[points], y[points],
                  outf['x' + d_out + m][points], 
                  outf['y' + d_out + m][points], 
-                 scale=quiv_scale)
+                 scale=quiv_scale,headwidth=6,
+                 headlength=9,headaxislength=9)
         
         # title ...
-        title_name = 'KDS75 ' + d_out + ' tau x ' + m
-        ax.set_title(title_name)
+        if s <= 3:
+            title_name = exps[s-1]
+            ax.set_title(title_name)
+            
+        if s is 1 or s is 4 or s is 7 or s is 10:
+            ex = ex + 1
+            ax.set_ylabel(seasons[ex-1])
+            ax.yaxis.labelpad = 35
         
-        def round_to_base(x, base=5):
-            return int(base * round(float(x) / base))
         # meridians. last input is meridians tick label
-        meridians = map(round_to_base, np.arange(-160, 200, 20))
+        meridians = map(round_to_base, np.arange(110, 180, 20))
         Bm.drawmeridians(meridians, linewidth=0.2, labels=[0,0,0,merid[s-1]])
         # parallels. last input is paralles tick label
-        parallels = map(round_to_base, np.arange(-80, 20, 10))
+        parallels = map(round_to_base, np.arange(-50, -10, 10))
         Bm.drawparallels(parallels, linewidth=0.2, labels=[paral[s-1],0,0,0])
         
-        if s is 4:
-            qk = plt.quiverkey(Q,0.8,1.05,0.1,r'0.1 $N m^{-2}$',labelpos='E')
-            cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
+        if s is 3:
+            qk = plt.quiverkey(Q,0.8,1.05,0.1,r'0.1 $N\ m^{-1}$',labelpos='E')
+            
+        if s is 10:
+            cbar_pos = [bnd[0]-0.08, bnd[1], 0.01, bnd[3]*4] 
             cbar_axe = fig.add_axes(cbar_pos)
-            cbar = plt.colorbar(contf, cax=cbar_axe, 
+            cbar = plt.colorbar(contf, cax=cbar_axe,
                                 orientation='vertical', drawedges=True)
-            cbar.set_label('N/m^-2') # units label on colourbar
+            cbar.set_label(r'Absolute $\tau^{x}\ (N/m^{-2})$') # units label on colourbar
             cbar.dividers.set_linewidth(0.2)
             cbar.outline.set_linewidth(0.5)
             cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
             cbar.ax.tick_params(width=0.2, length= 2)
+            cbar.ax.yaxis.set_label_position('left')
+            cbar.ax.yaxis.set_ticks_position('left')
             
-        elif s is 8:
-            qk = plt.quiverkey(Q,0.8,1.05,0.1,r'0.1 $N m^{-2}$',labelpos='E')
-            cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
+        elif s is 12:
+            cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]*4] 
             cbar_axe = fig.add_axes(cbar_pos)
             cbar = plt.colorbar(contf, cax=cbar_axe, 
                                 orientation='vertical', drawedges=True)
-            cbar.set_label('N/m^-2') # units label on colourbar
+            cbar.set_label(r'$\tau^{x}$ anomaly $(N/m^{-2})$') # units label on colourbar
             cbar.dividers.set_linewidth(0.2)
             cbar.outline.set_linewidth(0.5)
             cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
@@ -253,132 +249,19 @@ for d, d_out in zip(DATA, DATA_out):
             
         print(d_out + m + ' OK !')
         
+plt.suptitle(r"Wind Stress", y=0.97, fontsize=20)
 
 output_ls = os.listdir(figures_path)
 
 #
 if not scriptname:
     scriptname = 'test'
-    
-#
-if scriptname not in output_ls:
+
+elif scriptname not in output_ls:
     os.mkdir(figures_path + '/' + scriptname)
 
 
 # save figure
 plt.savefig(figures_path + '/' + scriptname + '/' + scriptname[0:3] \
-            + '_fig' + str(fign) + '_' + '.png', bbox_inches='tight', dpi=300)
-
-
-#%% plot surface maps: TEMPERATURE
-fign = 2
-plt.close('all') # close all existing figures
-fig = plt.figure() # generate figure
-matplotlib.rcParams.update({'font.size': 6}) 
-
-fig.set_size_inches(13, 6) # set figure size in inches
-row = 3
-col = 4
-
-merid = np.zeros(12)
-paral = np.zeros(12)
-
-merid[-col:] = 1
-paral[np.arange(0,11,col)] = 1
-
-s = 0
-
-for d, d_out in zip(DATA, DATA_out):
-    for m in MMM:
-        s = s + 1
-
-        # position figure wrt window template
-        ax = fig.add_subplot(row,col,s)
-        pos = ax.get_position()
-        bnd = list(pos.bounds)
-        magn = 0.025
-        bnd = [bnd[0], bnd[1], bnd[2]+magn, bnd[3]+magn*m_aspect]
-        ax.set_position(bnd)
-        
-        # colourmap: blue to red because looking at bias.
-        cmap = plt.get_cmap('gist_ncar')
-        step = 0.02
-        # levels to show on colourbar
-        contf_lvls = np.arange(-0.12,0.24+1e-08,step)
-        
-        ax.set_facecolor('grey')
-        
-        # meshgrid of lon lats
-        lons, lats = np.meshgrid(lon, lat)
-        # use projection template to create x and y axis
-        x, y = Bm(lons, lats)
-        
-        # for quiver. data points
-        yy = np.arange(0, y.shape[0], 20)
-        xx = np.arange(0, x.shape[1], 30)
-        quiv_scale = 2
-        
-        #
-        points = np.meshgrid(yy, xx)
-        
-        #
-        pickle.load(open('map.pickle','rb'))   # load here the above pickle
-        
-        # draw land outlines
-        Bm.drawcoastlines(linewidth=0.05)
-        Bm.fillcontinents(color='white')
-        
-        # filled contour plot
-        contf = Bm.contourf(x, y, out1['x' + d_out + m], 
-                           contf_lvls, cmap=cmap, extend='both')
-        
-        # quiver
-        Q = Bm.quiver(x[points], y[points],
-                 out1['x' + d_out + m][points], 
-                 out1['y' + d_out + m][points], 
-                 scale=quiv_scale)
-        
-        # title ...
-        title_name = 'KDS75 ' + d_out + ' tau x ' + m
-        ax.set_title(title_name)
-        
-        def round_to_base(x, base=5):
-            return int(base * round(float(x) / base))
-        # meridians. last input is meridians tick label
-        meridians = map(round_to_base, np.arange(-160, 200, 20))
-        Bm.drawmeridians(meridians, linewidth=0.2, labels=[0,0,0,merid[s-1]])
-        # parallels. last input is paralles tick label
-        parallels = map(round_to_base, np.arange(-80, 20, 10))
-        Bm.drawparallels(parallels, linewidth=0.2, labels=[paral[s-1],0,0,0])
-        
-        if s is 4:
-            qk = plt.quiverkey(Q,0.8,1.05,0.1,r'0.1 $N m^{-2}$',labelpos='E')
-            
-            cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
-            cbar_axe = fig.add_axes(cbar_pos)
-            cbar = plt.colorbar(contf, cax=cbar_axe, 
-                                orientation='vertical', drawedges=True)
-            cbar.set_label('N/m^-2') # units label on colourbar
-            cbar.dividers.set_linewidth(0.2)
-            cbar.outline.set_linewidth(0.5)
-            cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
-            cbar.ax.tick_params(width=0.2, length= 2)
-            
-        print(d_out + m + ' OK !')
-        
-
-output_ls = os.listdir(figures_path)
-
-#
-if not scriptname:
-    scriptname = 'test'
-    
-#
-if scriptname not in output_ls:
-    os.mkdir(figures_path + '/' + scriptname)
-
-
-# save figure
-plt.savefig(figures_path + '/' + scriptname + '/' + scriptname[0:3] \
-            + '_fig' + str(fign) + '_' + '.png', bbox_inches='tight', dpi=300)
+            + '_fig1_' + '.jpeg', bbox_inches='tight', dpi=200)
 

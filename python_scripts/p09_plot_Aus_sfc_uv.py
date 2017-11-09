@@ -23,15 +23,12 @@ os.chdir('/Users/earl/SAMexp')
 figures_path = '/Users/earl/Dropbox/SAMexp/figures/'
 data_path = '/Users/earl/Dropbox/Data/SAMexp/'
 
-Mon = {'JFM':['Jan', 'Feb', 'Mar'], 'AMJ':['Apr', 'May', 'Jun'], 
-       'JAS':['Jul', 'Aug', 'Sep'], 'OND':['Oct', 'Nov', 'Dec']}
- 
 MMM = ['JFM', 'AMJ', 'JAS', 'OND']
 
 DATA = ['', '_UP', '_PI']
 DATA_out = ['CT', 'UP', 'PI']
 
-var = ['x', 'y']
+var = ['u', 'v']
 
 scriptname = os.path.basename(sys.argv[0])[:-3]
 
@@ -60,31 +57,17 @@ lat_N_idx = find_nearest_index(lat, lat_N)
 lat_S_idx = find_nearest_index(lat, lat_S)
 
 
+#%% Load data temp_x
+z_idx = 4
 
-
-#%% Load data tau_x
 for v in var:
     for d, d_out in zip(DATA, DATA_out):
         for m in MMM:
             # create an instance of the ncCDF4 class
-            nc_fid = nc.Dataset(data_path + 'KDS75' + d + '/tau_'
-                                + v + '_' + Mon[m][0] + '.nc', 'r')
-
+            nc_fid = nc.Dataset(data_path + 'KDS75' + d + '/' + v + '_'
+                                + m + '_0.nc', 'r')
             # same for temperature (1,2,3)
-            tau_0 = nc_fid.variables['tau_' + v][0,:,:]
-
-            # Feb
-            nc_fid = nc.Dataset(data_path + 'KDS75' + d + '/tau_'
-                                + v + '_' + Mon[m][1] + '.nc', 'r')
-            tau_1 = nc_fid.variables['tau_' + v][0,:,:]
-            
-            # Mar
-            nc_fid = nc.Dataset(data_path + 'KDS75' + d + '/tau_'
-                                + v + '_' + Mon[m][2] + '.nc', 'r')
-            tau_2 = nc_fid.variables['tau_' + v][0,:,:]
-            
-            #
-            out[v + d_out + m] = (tau_0 + tau_1 + tau_2)/3
+            out[v + d_out + m] = nc_fid.variables[v][0,z_idx,:,:]
             
             #
             print(v + d_out + m + ' OK !')
@@ -92,6 +75,7 @@ for v in var:
 # get dimensions
 lat = nc_fid.variables['yu_ocean'][:]
 lon1 = nc_fid.variables['xu_ocean'][:]
+z = nc_fid.variables['st_ocean'][z_idx]
 
 
 #%% re-organise longitudes
@@ -137,14 +121,19 @@ m_aspect = Bm.aspect
 
 lon = lon1 + 210
 
+# meshgrid of lon lats
+lons, lats = np.meshgrid(lon, lat)
+# use projection template to create x and y axis
+x, y = Bm(lons, lats)
 
-#%% plot surface maps: TEMPERATURE
-fign = 1
-plt.close('all') # close all existing figures
-fig = plt.figure() # generate figure
-matplotlib.rcParams.update({'font.size': 6}) 
+# for quiver. data points
+yy = np.arange(0, y.shape[0], 20)
+xx = np.arange(0, x.shape[1], 30)
+quiv_scale = 2
 
-fig.set_size_inches(13, 6) # set figure size in inches
+#
+points = np.meshgrid(yy, xx)
+
 row = 3
 col = 4
 
@@ -154,13 +143,23 @@ paral = np.zeros(12)
 merid[-col:] = 1
 paral[np.arange(0,11,col)] = 1
 
-s = 0
 
+def round_to_base(x, base=5):
+    return int(base * round(float(x) / base))
+
+        
+#%% plot surface maps: TEMPERATURE
+fign = 1
+plt.close('all') # close all existing figures
+fig = plt.figure() # generate figure
+matplotlib.rcParams.update({'font.size': 6}) 
+fig.set_size_inches(13, 6) # set figure size in inches
+
+s = 0
 for d, d_out in zip(DATA, DATA_out):
     for m in MMM:
         s = s + 1
 
-        # position figure wrt window template
         ax = fig.add_subplot(row,col,s)
         pos = ax.get_position()
         bnd = list(pos.bounds)
@@ -168,36 +167,18 @@ for d, d_out in zip(DATA, DATA_out):
         bnd = [bnd[0], bnd[1], bnd[2]+magn, bnd[3]+magn*m_aspect]
         ax.set_position(bnd)
         
-        # colourmap: blue to red because looking at bias.
         if d_out is 'CT':
             cmap = plt.get_cmap('gist_ncar')
-            step = 0.02
-            # levels to show on colourbar
-            contf_lvls = np.arange(-0.12,0.24+1e-08,step)
+            step = 0.025
+            contf_lvls = np.arange(-0.25,0.25+1e-08,step)
             
         else:
             cmap = plt.get_cmap('seismic')
             step = 0.02
-            # levels to show on colourbar
-            contf_lvls = np.arange(-0.14,0.14+1e-08,step)            
+            contf_lvls = np.arange(-0.14,0.14+1e-08,step)
         
-        
+        #
         ax.set_facecolor('grey')
-        
-        # meshgrid of lon lats
-        lons, lats = np.meshgrid(lon, lat)
-        # use projection template to create x and y axis
-        x, y = Bm(lons, lats)
-        
-        # for quiver. data points
-        yy = np.arange(0, y.shape[0], 20)
-        xx = np.arange(0, x.shape[1], 30)
-        quiv_scale = 2
-        
-        #
-        points = np.meshgrid(yy, xx)
-        
-        #
         pickle.load(open('map.pickle','rb'))   # load here the above pickle
         
         # draw land outlines
@@ -205,69 +186,40 @@ for d, d_out in zip(DATA, DATA_out):
         Bm.fillcontinents(color='white')
         
         # filled contour plot
-        contf = Bm.contourf(x, y, outf['x' + d_out + m], 
+        contf = Bm.contourf(x, y, outf['u' + d_out + m], 
                            contf_lvls, cmap=cmap, extend='both')
-        
-        # quiver
-        Q = Bm.quiver(x[points], y[points],
-                 outf['x' + d_out + m][points], 
-                 outf['y' + d_out + m][points], 
-                 scale=quiv_scale)
-        
+            
         # title ...
-        title_name = 'KDS75 ' + d_out + ' tau x ' + m
+        title_name = 'KDS75 ' + d_out + ' u ' + m + ' z = ' + str(z)
         ax.set_title(title_name)
         
-        def round_to_base(x, base=5):
-            return int(base * round(float(x) / base))
-        # meridians. last input is meridians tick label
         meridians = map(round_to_base, np.arange(-160, 200, 20))
         Bm.drawmeridians(meridians, linewidth=0.2, labels=[0,0,0,merid[s-1]])
-        # parallels. last input is paralles tick label
         parallels = map(round_to_base, np.arange(-80, 20, 10))
         Bm.drawparallels(parallels, linewidth=0.2, labels=[paral[s-1],0,0,0])
         
-        if s is 4:
-            qk = plt.quiverkey(Q,0.8,1.05,0.1,r'0.1 $N m^{-2}$',labelpos='E')
+        if s is 4 or s is 8:
             cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
             cbar_axe = fig.add_axes(cbar_pos)
             cbar = plt.colorbar(contf, cax=cbar_axe, 
                                 orientation='vertical', drawedges=True)
-            cbar.set_label('N/m^-2') # units label on colourbar
+            cbar.set_label('m/s') # units label on colourbar
             cbar.dividers.set_linewidth(0.2)
             cbar.outline.set_linewidth(0.5)
             cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
             cbar.ax.tick_params(width=0.2, length= 2)
             
-        elif s is 8:
-            qk = plt.quiverkey(Q,0.8,1.05,0.1,r'0.1 $N m^{-2}$',labelpos='E')
-            cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
-            cbar_axe = fig.add_axes(cbar_pos)
-            cbar = plt.colorbar(contf, cax=cbar_axe, 
-                                orientation='vertical', drawedges=True)
-            cbar.set_label('N/m^-2') # units label on colourbar
-            cbar.dividers.set_linewidth(0.2)
-            cbar.outline.set_linewidth(0.5)
-            cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
-            cbar.ax.tick_params(width=0.2, length= 2)
-            
-        print(d_out + m + ' OK !')
+        print('u' + d_out + m + ' OK !')
         
 
 output_ls = os.listdir(figures_path)
-
-#
 if not scriptname:
     scriptname = 'test'
-    
-#
 if scriptname not in output_ls:
     os.mkdir(figures_path + '/' + scriptname)
-
-
-# save figure
 plt.savefig(figures_path + '/' + scriptname + '/' + scriptname[0:3] \
-            + '_fig' + str(fign) + '_' + '.png', bbox_inches='tight', dpi=300)
+            + '_fig' + str(fign) + '_' + str(z_idx) + '.png', 
+            bbox_inches='tight', dpi=300)
 
 
 #%% plot surface maps: TEMPERATURE
@@ -275,24 +227,13 @@ fign = 2
 plt.close('all') # close all existing figures
 fig = plt.figure() # generate figure
 matplotlib.rcParams.update({'font.size': 6}) 
-
 fig.set_size_inches(13, 6) # set figure size in inches
-row = 3
-col = 4
-
-merid = np.zeros(12)
-paral = np.zeros(12)
-
-merid[-col:] = 1
-paral[np.arange(0,11,col)] = 1
 
 s = 0
-
 for d, d_out in zip(DATA, DATA_out):
     for m in MMM:
         s = s + 1
 
-        # position figure wrt window template
         ax = fig.add_subplot(row,col,s)
         pos = ax.get_position()
         bnd = list(pos.bounds)
@@ -300,28 +241,18 @@ for d, d_out in zip(DATA, DATA_out):
         bnd = [bnd[0], bnd[1], bnd[2]+magn, bnd[3]+magn*m_aspect]
         ax.set_position(bnd)
         
-        # colourmap: blue to red because looking at bias.
-        cmap = plt.get_cmap('gist_ncar')
-        step = 0.02
-        # levels to show on colourbar
-        contf_lvls = np.arange(-0.12,0.24+1e-08,step)
+        if d_out is 'CT':
+            cmap = plt.get_cmap('gist_ncar')
+            step = 0.025
+            contf_lvls = np.arange(-0.25,0.25+1e-08,step)
+            
+        else:
+            cmap = plt.get_cmap('seismic')
+            step = 0.02
+            contf_lvls = np.arange(-0.14,0.14+1e-08,step)
         
+        #
         ax.set_facecolor('grey')
-        
-        # meshgrid of lon lats
-        lons, lats = np.meshgrid(lon, lat)
-        # use projection template to create x and y axis
-        x, y = Bm(lons, lats)
-        
-        # for quiver. data points
-        yy = np.arange(0, y.shape[0], 20)
-        xx = np.arange(0, x.shape[1], 30)
-        quiv_scale = 2
-        
-        #
-        points = np.meshgrid(yy, xx)
-        
-        #
         pickle.load(open('map.pickle','rb'))   # load here the above pickle
         
         # draw land outlines
@@ -329,56 +260,177 @@ for d, d_out in zip(DATA, DATA_out):
         Bm.fillcontinents(color='white')
         
         # filled contour plot
-        contf = Bm.contourf(x, y, out1['x' + d_out + m], 
+        contf = Bm.contourf(x, y, outf['v' + d_out + m], 
                            contf_lvls, cmap=cmap, extend='both')
-        
-        # quiver
-        Q = Bm.quiver(x[points], y[points],
-                 out1['x' + d_out + m][points], 
-                 out1['y' + d_out + m][points], 
-                 scale=quiv_scale)
-        
+            
         # title ...
-        title_name = 'KDS75 ' + d_out + ' tau x ' + m
+        title_name = 'KDS75 ' + d_out + ' v ' + m + ' z = ' + str(z)
         ax.set_title(title_name)
         
-        def round_to_base(x, base=5):
-            return int(base * round(float(x) / base))
-        # meridians. last input is meridians tick label
         meridians = map(round_to_base, np.arange(-160, 200, 20))
         Bm.drawmeridians(meridians, linewidth=0.2, labels=[0,0,0,merid[s-1]])
-        # parallels. last input is paralles tick label
         parallels = map(round_to_base, np.arange(-80, 20, 10))
         Bm.drawparallels(parallels, linewidth=0.2, labels=[paral[s-1],0,0,0])
         
-        if s is 4:
-            qk = plt.quiverkey(Q,0.8,1.05,0.1,r'0.1 $N m^{-2}$',labelpos='E')
-            
+        if s is 4 or s is 8:
             cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
             cbar_axe = fig.add_axes(cbar_pos)
             cbar = plt.colorbar(contf, cax=cbar_axe, 
                                 orientation='vertical', drawedges=True)
-            cbar.set_label('N/m^-2') # units label on colourbar
+            cbar.set_label('m/s') # units label on colourbar
             cbar.dividers.set_linewidth(0.2)
             cbar.outline.set_linewidth(0.5)
             cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
             cbar.ax.tick_params(width=0.2, length= 2)
             
-        print(d_out + m + ' OK !')
+        print('u' + d_out + m + ' OK !')
         
 
 output_ls = os.listdir(figures_path)
-
-#
 if not scriptname:
     scriptname = 'test'
-    
-#
 if scriptname not in output_ls:
     os.mkdir(figures_path + '/' + scriptname)
-
-
-# save figure
 plt.savefig(figures_path + '/' + scriptname + '/' + scriptname[0:3] \
-            + '_fig' + str(fign) + '_' + '.png', bbox_inches='tight', dpi=300)
+            + '_fig' + str(fign) + '_' + str(z_idx) + '.png', 
+            bbox_inches='tight', dpi=300)
+
+
+
+#%% plot surface maps: TEMPERATURE
+fign = 3
+plt.close('all') # close all existing figures
+fig = plt.figure() # generate figure
+matplotlib.rcParams.update({'font.size': 6}) 
+fig.set_size_inches(13, 6) # set figure size in inches
+
+s = 0
+for d, d_out in zip(DATA, DATA_out):
+    for m in MMM:
+        s = s + 1
+
+        ax = fig.add_subplot(row,col,s)
+        pos = ax.get_position()
+        bnd = list(pos.bounds)
+        magn = 0.025
+        bnd = [bnd[0], bnd[1], bnd[2]+magn, bnd[3]+magn*m_aspect]
+        ax.set_position(bnd)
+        
+        cmap = plt.get_cmap('gist_ncar')
+        step = 0.025
+        contf_lvls = np.arange(-0.25,0.25+1e-08,step)
+        
+        #
+        ax.set_facecolor('grey')
+        pickle.load(open('map.pickle','rb'))   # load here the above pickle
+        
+        # draw land outlines
+        Bm.drawcoastlines(linewidth=0.05)
+        Bm.fillcontinents(color='white')
+        
+        # filled contour plot
+        contf = Bm.contourf(x, y, out1['u' + d_out + m], 
+                           contf_lvls, cmap=cmap, extend='both')
+            
+        # title ...
+        title_name = 'KDS75 ' + d_out + ' u ' + m + ' z = ' + str(z)
+        ax.set_title(title_name)
+        
+        meridians = map(round_to_base, np.arange(-160, 200, 20))
+        Bm.drawmeridians(meridians, linewidth=0.2, labels=[0,0,0,merid[s-1]])
+        parallels = map(round_to_base, np.arange(-80, 20, 10))
+        Bm.drawparallels(parallels, linewidth=0.2, labels=[paral[s-1],0,0,0])
+        
+        if s is 4:
+            cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
+            cbar_axe = fig.add_axes(cbar_pos)
+            cbar = plt.colorbar(contf, cax=cbar_axe, 
+                                orientation='vertical', drawedges=True)
+            cbar.set_label('m/s') # units label on colourbar
+            cbar.dividers.set_linewidth(0.2)
+            cbar.outline.set_linewidth(0.5)
+            cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
+            cbar.ax.tick_params(width=0.2, length= 2)
+            
+        print('u' + d_out + m + ' OK !')
+        
+
+output_ls = os.listdir(figures_path)
+if not scriptname:
+    scriptname = 'test'
+if scriptname not in output_ls:
+    os.mkdir(figures_path + '/' + scriptname)
+plt.savefig(figures_path + '/' + scriptname + '/' + scriptname[0:3] \
+            + '_fig' + str(fign) + '_' + str(z_idx) + '.png', 
+            bbox_inches='tight', dpi=300)
+
+
+
+#%% plot surface maps: TEMPERATURE
+fign = 4
+plt.close('all') # close all existing figures
+fig = plt.figure() # generate figure
+matplotlib.rcParams.update({'font.size': 6}) 
+fig.set_size_inches(13, 6) # set figure size in inches
+
+s = 0
+for d, d_out in zip(DATA, DATA_out):
+    for m in MMM:
+        s = s + 1
+
+        ax = fig.add_subplot(row,col,s)
+        pos = ax.get_position()
+        bnd = list(pos.bounds)
+        magn = 0.025
+        bnd = [bnd[0], bnd[1], bnd[2]+magn, bnd[3]+magn*m_aspect]
+        ax.set_position(bnd)
+        
+        if d_out is 'CT':
+            cmap = plt.get_cmap('gist_ncar')
+            step = 0.025
+            contf_lvls = np.arange(-0.25,0.25+1e-08,step)
+        
+        #
+        ax.set_facecolor('grey')
+        pickle.load(open('map.pickle','rb'))   # load here the above pickle
+        
+        # draw land outlines
+        Bm.drawcoastlines(linewidth=0.05)
+        Bm.fillcontinents(color='white')
+        
+        # filled contour plot
+        contf = Bm.contourf(x, y, outf['v' + d_out + m], 
+                           contf_lvls, cmap=cmap, extend='both')
+            
+        # title ...
+        title_name = 'KDS75 ' + d_out + ' v ' + m + ' z = ' + str(z)
+        ax.set_title(title_name)
+        
+        meridians = map(round_to_base, np.arange(-160, 200, 20))
+        Bm.drawmeridians(meridians, linewidth=0.2, labels=[0,0,0,merid[s-1]])
+        parallels = map(round_to_base, np.arange(-80, 20, 10))
+        Bm.drawparallels(parallels, linewidth=0.2, labels=[paral[s-1],0,0,0])
+        
+        if s is 4:
+            cbar_pos = [bnd[0]+bnd[2]+0.01, bnd[1], 0.01, bnd[3]]
+            cbar_axe = fig.add_axes(cbar_pos)
+            cbar = plt.colorbar(contf, cax=cbar_axe, 
+                                orientation='vertical', drawedges=True)
+            cbar.set_label('m/s') # units label on colourbar
+            cbar.dividers.set_linewidth(0.2)
+            cbar.outline.set_linewidth(0.5)
+            cbar.set_ticks(contf_lvls[np.arange(0,np.size(contf_lvls),2)])
+            cbar.ax.tick_params(width=0.2, length= 2)
+            
+        print('u' + d_out + m + ' OK !')
+        
+
+output_ls = os.listdir(figures_path)
+if not scriptname:
+    scriptname = 'test'
+if scriptname not in output_ls:
+    os.mkdir(figures_path + '/' + scriptname)
+plt.savefig(figures_path + '/' + scriptname + '/' + scriptname[0:3] \
+            + '_fig' + str(fign) + '_' + str(z_idx) + '.png', 
+            bbox_inches='tight', dpi=300)
 

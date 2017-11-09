@@ -144,7 +144,7 @@ for m in MMM:
             cmap = plt.get_cmap('seismic')
             step = 0.02
             # levels to show on colourbar
-            contf_lvls = np.arange(-0.14,0.14+1e-08,step)            
+            contf_lvls = np.arange(-0.14,0.14+1e-08,step)
         
         
         ax.set_facecolor('grey')
