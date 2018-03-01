@@ -1,1 +1,0 @@
-scp ncra_GFDL50_to3000m.sh erd561@raijin.nci.org.au:/short/e14/erd561/SAMexp/.
